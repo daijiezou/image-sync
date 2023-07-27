@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+
+main.exe
+main
+
+
+.DS_Store
+
+config/config.yaml
+
+go.sum
