@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/tealeg/xlsx"
+	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/constant"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
 	"gopkg.in/yaml.v3"
+	"image-sync/config"
+	"image-sync/dao"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +23,9 @@ import (
 const (
 	BasePath          = "./"
 	SyncSucceedResult = "Finished, 0 tasks failed"
+
+	OfficialRepo = 1
+	Published    = 1
 )
 
 var SyncSize int64 //此次同步镜像大小,单位B
@@ -36,20 +43,50 @@ type ThirdPkgSyncImageManager struct {
 	exitChan             chan struct{}
 }
 
-func NewThirdPkgSyncImageManager(sourceRegistryAddr, targetRegisTryAddr, syncerPath, outputPath, authPath string, goroutineCount int) *ThirdPkgSyncImageManager {
-	initTargetServer(targetRegisTryAddr, authPath)
+func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImageManager {
+	initTargetServer(config.IMConfig.TargetRegistryAddr, authPath)
 	return &ThirdPkgSyncImageManager{
-		sourceRegistryAddr: sourceRegistryAddr,
-		targetRegistryAddr: targetRegisTryAddr,
+		sourceRegistryAddr: config.IMConfig.SourceRegistryAddr,
+		targetRegistryAddr: config.IMConfig.TargetRegistryAddr,
 		syncerPath:         syncerPath,
-		outputPath:         outputPath,
+		outputPath:         config.IMConfig.OutputBasePath,
 		authPath:           authPath,
-		pullGoroutineChan:  make(chan struct{}, goroutineCount),
+		pullGoroutineChan:  make(chan struct{}, config.IMConfig.Proc),
 		exitChan:           make(chan struct{}, 1),
 	}
 }
 
-func (s *ThirdPkgSyncImageManager) PreHandleData(imageListPath string) (needSyncImageMetaList []DataImage, err error) {
+func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []DataImage, err error) {
+	var imageList []DataImage
+	if config.IMConfig.ImageListPath != "" {
+		imageList, err = s.preHandleData(config.IMConfig.ImageListPath)
+		if err != nil {
+			return imageList, err
+		}
+	} else {
+		imageList, err = s.preHandleDataInDb(config.IMConfig.StartTime, config.IMConfig.EndTime)
+		glog.Infof("imageList:%v", imageList)
+		if err != nil {
+			return imageList, err
+		}
+	}
+	//过滤已经同步成功的镜像
+	syncSucceedImageList := getSyncSucceedImageList(s.outputPath + "-succeed")
+	for _, image := range syncSucceedImageList {
+		for i := 0; i < len(imageList); i++ {
+			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {
+				imageList = append(imageList[:i], imageList[i+1:]...)
+				break
+			}
+		}
+	}
+	s.totalNeedSyncCount = len(imageList)
+	s.currentNeedSyncCount = len(imageList)
+	glog.Infof("start sync image,total image:%d", s.totalNeedSyncCount)
+	return imageList, nil
+}
+
+func (s *ThirdPkgSyncImageManager) preHandleData(imageListPath string) (needSyncImageMetaList []DataImage, err error) {
 	xlFile, err := xlsx.OpenFile(imageListPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "open xlsx file failed")
@@ -81,19 +118,34 @@ func (s *ThirdPkgSyncImageManager) PreHandleData(imageListPath string) (needSync
 		return nil, err
 	}
 
-	//过滤已经同步成功的镜像
-	syncSucceedImageList := getSyncSucceedImageList(s.outputPath + "-succeed")
-	for _, image := range syncSucceedImageList {
-		for i := 0; i < len(imageList); i++ {
-			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {
-				imageList = append(imageList[:i], imageList[i+1:]...)
-				break
-			}
-		}
+	return imageList, nil
+}
+
+func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) (needSyncImageMetaList []DataImage, err error) {
+	var imageIds []int64
+	err = dao.MySQL().Table("pro_job").Distinct("image_id").Select("image_id").
+		Where("create_time > ?", startTime).
+		And("create_time < ?", endTime).
+		Find(&imageIds)
+	if err != nil {
+		return nil, errors.WithStack(err)
 	}
-	s.totalNeedSyncCount = len(imageList)
-	s.currentNeedSyncCount = len(imageList)
-	glog.Infof("start sync image,total image:%d", s.totalNeedSyncCount)
+	var officialImageIds []int64
+	err = dao.MySQL().Table("data_image_repository").
+		Select("data_image.image_id").
+		Join("RIGHT", "data_image", "data_image_repository.image_repository_id = data_image.image_repository_id ").
+		And("data_image_repository.publish_status = ?", Published).
+		And("data_image_repository.is_official= ?", OfficialRepo).
+		And("data_image.libra_status = ?", constant.PavoStatusNormal).Find(&officialImageIds)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	imageIds = append(imageIds, officialImageIds...)
+	var imageList []DataImage
+	err = dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag").Where("libra_status = ?", constant.PavoStatusNormal).In("image_id", imageIds).Find(&imageList)
+	if err != nil {
+		return imageList, errors.WithStack(err)
+	}
 	return imageList, nil
 }
 
@@ -136,7 +188,7 @@ func (s *ThirdPkgSyncImageManager) sync(imageMeta DataImage) {
 	if bashPath, err := exec.LookPath("bash"); err == nil && bashPath != "" {
 		cmd = exec.Command("bash")
 	}
-	cmd.Stdin = strings.NewReader("\n" + fmt.Sprintf("%s --images %s --auth %s", s.syncerPath,
+	cmd.Stdin = strings.NewReader("\n" + fmt.Sprintf("%s --images %s --auth %s --retries 3", s.syncerPath,
 		imageYamlPath(imageMeta.Name, imageMeta.Tag, BasePath), s.authPath))
 
 	output, err := cmd.CombinedOutput()
@@ -155,11 +207,13 @@ func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutp
 		if err != nil {
 			glog.Warnf("get image detail failed:%v", err.Error())
 			imageMeta.Status = SyncFailed
+
 		}
 		if imageSize <= 0 {
 			imageMeta.Status = SyncFailed
 		} else {
 			SyncSize += imageSize
+			imageMeta.Size = strconv.FormatInt(imageSize, 10)
 			imageMeta.Status = SyncSucceed
 		}
 	} else {

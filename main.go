@@ -4,30 +4,34 @@ import (
 	"flag"
 	"fmt"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
+	"image-sync/config"
+	"image-sync/dao"
 	"image-sync/imagesync"
 	"time"
 )
 
 var (
-	sourceRegistryAddr = flag.String("sourceRegistryAddr", "cluster2-test3.virtaicloud.com:32402", "")
-	targetRegistryAddr = flag.String("targetRegistryAddr", "10.12.101.13:32402", "")
-	syncerPath         = flag.String("syncerPath", "./image-syncer", "The path of the image-syncer")
-	outputBasePath     = flag.String("output", "./output", "The base path of the output configFile")
-	auth               = flag.String("config", "./auth.yaml", "The path of the auth configFile")
-	imageListPath      = flag.String("imageList", "./example2.xlsx", "The path of the imageList,is a xlsx file")
+	syncerPath = flag.String("syncerPath", "./image-syncer", "The path of the image-syncer")
+	auth       = flag.String("auth", "./auth.yaml", "The path of the auth configFile")
+	configFile = flag.String("config", "./config.yaml", "The path of the auth configFile")
 )
 
 func init() {
 	flag.Parse()
+	config.ParseConfig("image-sync", *configFile)
+	glog.Infow("parse config succeed", "config", config.IMConfig)
+	if config.IMConfig.DbDsn != "" {
+		dao.InitMySQL(config.IMConfig.DbDsn)
+	}
 }
 
 func main() {
 	startTime := time.Now()
 	fmt.Println("start time:", startTime)
-	sm := imagesync.NewThirdPkgSyncImageManager(*sourceRegistryAddr, *targetRegistryAddr, *syncerPath, *outputBasePath, *auth, 1)
-	imageList, err := sm.PreHandleData(*imageListPath)
+	sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
+	imageList, err := sm.GetNeedSyncImageMetaList()
 	if err != nil {
-		glog.Error("pre sync failed", glog.String("error", err.Error()))
+		glog.Errorf("pre sync failed,err:%+v", err)
 		return
 	}
 	sm.Sync(imageList)
