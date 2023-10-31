@@ -8,6 +8,7 @@ require (
 	github.com/spf13/viper v1.10.1
 	github.com/tealeg/xlsx v1.0.5
 	gitlab.yellow.virtaitech.com/gemini-platform/public-gemini v0.0.0-20231025132336-2461817d1fe1
+	gitlab.yellow.virtaitech.com/gemini-platform/libcontainerctl v0.0.0-20230731025805-9890d0487650
 	gopkg.in/yaml.v3 v3.0.1
 	xorm.io/xorm v1.2.5
 )

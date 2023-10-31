@@ -8,7 +8,7 @@ import (
 type GlobalConfig struct {
 	SourceRegistryAddr string
 	TargetRegistryAddr string
-	OutputBasePath     string
+	OutputPath         string
 	ImageListPath      string
 	StartTime          string
 	EndTime            string

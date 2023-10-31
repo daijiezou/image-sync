@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/tealeg/xlsx"
+	"gitlab.yellow.virtaitech.com/gemini-platform/libcontainerctl/pkg/containerctl"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/constant"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
 	"gopkg.in/yaml.v3"
@@ -41,18 +42,26 @@ type ThirdPkgSyncImageManager struct {
 	outputPath           string
 	authPath             string
 	exitChan             chan struct{}
+	containerRuntime     containerctl.ContainerRuntime
 }
 
 func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImageManager {
 	initTargetServer(config.IMConfig.TargetRegistryAddr, authPath)
+	hostRootPrefix := strings.TrimSuffix(os.Getenv("HOST_ROOT"), "/")
+	cli, _, _, err := containerctl.NewContainerRuntime(context.Background(), hostRootPrefix)
+	if err != nil {
+		glog.Fatalf(err.Error())
+	}
+
 	return &ThirdPkgSyncImageManager{
 		sourceRegistryAddr: config.IMConfig.SourceRegistryAddr,
 		targetRegistryAddr: config.IMConfig.TargetRegistryAddr,
 		syncerPath:         syncerPath,
-		outputPath:         config.IMConfig.OutputBasePath,
+		outputPath:         config.IMConfig.OutputPath,
 		authPath:           authPath,
 		pullGoroutineChan:  make(chan struct{}, config.IMConfig.Proc),
 		exitChan:           make(chan struct{}, 1),
+		containerRuntime:   cli,
 	}
 }
 
@@ -71,7 +80,7 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 		}
 	}
 	//过滤已经同步成功的镜像
-	syncSucceedImageList := getSyncSucceedImageList(s.outputPath + "-succeed")
+	syncSucceedImageList := getSyncSucceedImageList(path.Join(s.outputPath, "sync-succeed"))
 	for _, image := range syncSucceedImageList {
 		for i := 0; i < len(imageList); i++ {
 			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {
@@ -155,7 +164,13 @@ func (s *ThirdPkgSyncImageManager) Sync(needSyncImageMetaList []DataImage) {
 		for i := 0; i < s.totalNeedSyncCount; i++ {
 			s.pullGoroutineChan <- struct{}{}
 			go func(imageMeta DataImage) {
-				s.sync(imageMeta)
+				switch config.IMConfig.SyncMethod {
+				case "syncer":
+					s.sync(imageMeta)
+				case "save":
+					s.save(imageMeta)
+				}
+
 			}(needSyncImageMetaList[i])
 		}
 	}()
@@ -196,6 +211,27 @@ func (s *ThirdPkgSyncImageManager) sync(imageMeta DataImage) {
 	syncOutput := string(output)
 	fmt.Println(syncOutput)
 	s.checkSyncStatus(imageMeta, syncOutput)
+}
+
+func (s *ThirdPkgSyncImageManager) save(imageMeta DataImage) {
+	imageFullName := path.Join(s.sourceRegistryAddr, imageMeta.Name+":"+imageMeta.Tag)
+	defer func() {
+		<-s.pullGoroutineChan
+		s.decrNeedSyncCount()
+		s.containerRuntime.ImageRemove(context.Background(), []string{imageFullName}, true)
+	}()
+	err := s.containerRuntime.ImagePull(context.Background(), imageMeta.Name+":"+imageMeta.Tag, s.sourceRegistryAddr, "system", "lvszkjzqnf3yh")
+	if err != nil {
+		glog.Warnw("image pull failed", logError(err), logMeta(imageMeta))
+		imageMeta.Status = SyncFailed
+	}
+	err = s.containerRuntime.ImageSave(context.Background(), []string{imageFullName}, config.IMConfig.OutputPath)
+	if err != nil {
+		glog.Warnw("image save failed", logError(err), logMeta(imageMeta))
+		imageMeta.Status = SyncFailed
+	}
+	imageMeta.Status = SyncSucceed
+	s.UpdateImageSyncStatus(imageMeta)
 }
 
 func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutput string) {
@@ -260,14 +296,14 @@ func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
 	var file *os.File
 	if imageMeta.Status == SyncSucceed {
 		glog.Infow("image sync succeed", logMeta(imageMeta))
-		file, err = os.OpenFile(s.outputPath+"-succeed", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		file, err = os.OpenFile(path.Join(s.outputPath, "sync-succeed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			glog.Warnw("open file failed", logError(err), logMeta(imageMeta))
 			return
 		}
 	} else {
 		glog.Errorw("image sync failed", logMeta(imageMeta))
-		file, err = os.OpenFile(s.outputPath+"-failed", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		file, err = os.OpenFile(path.Join(s.outputPath, "sync-failed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			glog.Warnw("open file failed", logError(err), logMeta(imageMeta))
 			return
