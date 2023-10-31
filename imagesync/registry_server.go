@@ -56,9 +56,12 @@ func (r *RegistryServer) GetImageDetail(ctx context.Context, projectName, repoNa
 	imageName := projectName + "/" + repoName
 	path := fmt.Sprintf("/%s/manifests/%s", imageName, tag)
 	url := r.addr + "/v2" + path
-	token, err := r.GetToken(GetScope(imageName))
-	if err != nil {
-		return 0, err
+	var token string
+	if r.authServer != "" {
+		token, err = r.GetToken(GetScope(imageName))
+		if err != nil {
+			return 0, err
+		}
 	}
 	resp, err := registryHttpRequest(url, http.MethodGet, token, ctx)
 	if err != nil {
@@ -145,6 +148,9 @@ func getAuthServerAndService(addr string) (authServer, service string) {
 	}
 	defer resp.Body.Close()
 	challenge := resp.Header.Get("Www-Authenticate")
+	if challenge == "" {
+		return "", ""
+	}
 	// Bearer realm="http://10.12.10.149/service/token",service="harbor-registry"
 	challenge = strings.ReplaceAll(challenge, "\"", "")
 	authServer = strings.Split(strings.Split(challenge, ",")[0], "=")[1]
