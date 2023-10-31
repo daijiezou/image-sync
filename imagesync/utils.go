@@ -76,3 +76,15 @@ func splitImageNameToProjAndRepo(name string) (projectName string, repoName stri
 	repoName = strings.TrimPrefix(name, projectName+"/")
 	return projectName, repoName
 }
+
+func removeDuplicateElement(originList []int64) []int64 {
+	result := make([]int64, 0, len(originList))
+	temp := map[int64]struct{}{}
+	for _, item := range originList {
+		if _, ok := temp[item]; !ok {
+			temp[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+	return result
+}

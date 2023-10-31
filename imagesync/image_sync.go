@@ -131,9 +131,9 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) 
 		return nil, errors.WithStack(err)
 	}
 	var officialImageIds []int64
-	err = dao.MySQL().Table("data_image_repository").
+	err = dao.MySQL().Table("data_image").
 		Select("data_image.image_id").
-		Join("RIGHT", "data_image", "data_image_repository.image_repository_id = data_image.image_repository_id ").
+		Join("RIGHT", "data_image_repository", "data_image_repository.image_repository_id = data_image.image_repository_id ").
 		And("data_image_repository.publish_status = ?", Published).
 		And("data_image_repository.is_official= ?", OfficialRepo).
 		And("data_image.libra_status = ?", constant.PavoStatusNormal).Find(&officialImageIds)
@@ -141,6 +141,7 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) 
 		return nil, errors.WithStack(err)
 	}
 	imageIds = append(imageIds, officialImageIds...)
+	imageIds = removeDuplicateElement(imageIds)
 	var imageList []DataImage
 	err = dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag").Where("libra_status = ?", constant.PavoStatusNormal).In("image_id", imageIds).Find(&imageList)
 	if err != nil {

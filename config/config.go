@@ -8,13 +8,13 @@ import (
 type GlobalConfig struct {
 	SourceRegistryAddr string
 	TargetRegistryAddr string
-	TargetRegistryAzID string
 	OutputBasePath     string
 	ImageListPath      string
 	StartTime          string
 	EndTime            string
 	DbDsn              string
 	Proc               int
+	SyncMethod         string
 }
 
 var IMConfig *GlobalConfig
