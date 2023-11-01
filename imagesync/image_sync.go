@@ -38,7 +38,6 @@ type ThirdPkgSyncImageManager struct {
 	lock                 sync.Mutex
 	pullGoroutineChan    chan struct{}
 	syncerPath           string
-	outputPath           string
 	authPath             string
 	exitChan             chan struct{}
 }
@@ -49,7 +48,6 @@ func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImage
 		sourceRegistryAddr: config.IMConfig.SourceRegistryAddr,
 		targetRegistryAddr: config.IMConfig.TargetRegistryAddr,
 		syncerPath:         syncerPath,
-		outputPath:         config.IMConfig.OutputPath,
 		authPath:           authPath,
 		pullGoroutineChan:  make(chan struct{}, config.IMConfig.Proc),
 		exitChan:           make(chan struct{}, 1),
@@ -70,7 +68,7 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 		}
 	}
 	//过滤已经同步成功的镜像
-	syncSucceedImageList := GetSyncSucceedImageList(path.Join(s.outputPath, "sync-succeed"))
+	syncSucceedImageList := GetSyncSucceedImageList(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
 	for _, image := range syncSucceedImageList {
 		for i := 0; i < len(imageList); i++ {
 			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {
@@ -263,14 +261,14 @@ func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
 	var file *os.File
 	if imageMeta.Status == SyncSucceed {
 		glog.Infow("image sync succeed", logMeta(imageMeta))
-		file, err = os.OpenFile(path.Join(s.outputPath, "sync-succeed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		file, err = os.OpenFile(path.Join(config.IMConfig.OutputPath, "sync-succeed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			glog.Warnw("open file failed", logError(err), logMeta(imageMeta))
 			return
 		}
 	} else {
 		glog.Errorw("image sync failed", logMeta(imageMeta))
-		file, err = os.OpenFile(path.Join(s.outputPath, "sync-failed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		file, err = os.OpenFile(path.Join(config.IMConfig.OutputPath, "sync-failed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			glog.Warnw("open file failed", logError(err), logMeta(imageMeta))
 			return

@@ -16,7 +16,6 @@ var (
 	syncerPath = flag.String("syncerPath", "./image-syncer", "The path of the image-syncer")
 	auth       = flag.String("auth", "./auth.yaml", "The path of the auth configFile")
 	configFile = flag.String("config", "./config.yaml", "The path of the auth configFile")
-	mode       = flag.String("mode", "sync", "sync:同步镜像 update:更改镜像元数据")
 )
 
 func init() {
@@ -37,7 +36,7 @@ func init() {
 }
 
 func main() {
-	if *mode == "sync" {
+	if config.IMConfig.Mode == "sync" {
 		startTime := time.Now()
 		fmt.Println("start time:", startTime)
 		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
@@ -53,7 +52,7 @@ func main() {
 		costTimeSec := endTime.Sub(startTime).Seconds()
 		fmt.Printf("迁移速度:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
 	}
-	if *mode == "update" {
+	if config.IMConfig.Mode == "update" {
 		UpdateImageMeta()
 	}
 
