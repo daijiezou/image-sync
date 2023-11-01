@@ -136,6 +136,7 @@ require (
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yuchanns/srslog v1.1.0 // indirect
+	gitlab.yellow.virtaitech.com/gemini-platform/public-geminidb v0.0.0-20231101064715-94572da2bc15 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect

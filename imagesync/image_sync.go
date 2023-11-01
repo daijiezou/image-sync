@@ -70,7 +70,7 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 		}
 	}
 	//过滤已经同步成功的镜像
-	syncSucceedImageList := getSyncSucceedImageList(path.Join(s.outputPath, "sync-succeed"))
+	syncSucceedImageList := GetSyncSucceedImageList(path.Join(s.outputPath, "sync-succeed"))
 	for _, image := range syncSucceedImageList {
 		for i := 0; i < len(imageList); i++ {
 			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {

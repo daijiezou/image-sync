@@ -51,7 +51,7 @@ func removeImageYaml(imageName, imageTag, basePath string) {
 	}
 }
 
-func getSyncSucceedImageList(outputPath string) []DataImage {
+func GetSyncSucceedImageList(outputPath string) []DataImage {
 	file, err := os.Open(outputPath)
 	if err != nil {
 		return nil
