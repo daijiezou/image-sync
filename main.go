@@ -7,6 +7,8 @@ import (
 	"image-sync/config"
 	"image-sync/dao"
 	"image-sync/imagesync"
+	"os"
+	"path"
 	"time"
 )
 
@@ -22,6 +24,14 @@ func init() {
 	glog.Infow("parse config succeed", "config", config.IMConfig)
 	if config.IMConfig.DbDsn != "" {
 		dao.InitMySQL(config.IMConfig.DbDsn)
+	}
+	if !isExist(path.Join(config.IMConfig.OutputPath, "sync-succeed")) {
+		os.Create(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
+
+	}
+	if !isExist(path.Join(config.IMConfig.OutputPath, "sync-failed")) {
+		os.Create(path.Join(config.IMConfig.OutputPath, "sync-failed"))
+
 	}
 }
 
@@ -39,5 +49,21 @@ func main() {
 	fmt.Println("end time:", endTime)
 	fmt.Printf("cost time:%v,sync totalSize:%v MB\n", endTime.Sub(startTime), imagesync.SyncSize>>20)
 	costTimeSec := endTime.Sub(startTime).Seconds()
-	fmt.Println("迁移速度", costTimeSec/float64(imagesync.SyncSize>>20))
+	fmt.Printf("迁移速度:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
+}
+
+// 判断文件或文件夹是否存在
+func isExist(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		if os.IsNotExist(err) {
+			return false
+		}
+		fmt.Println(err)
+		return false
+	}
+	return true
 }

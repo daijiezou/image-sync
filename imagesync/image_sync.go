@@ -43,16 +43,16 @@ type ThirdPkgSyncImageManager struct {
 	authPath             string
 	exitChan             chan struct{}
 	containerRuntime     containerctl.ContainerRuntime
+	containerCtx         context.Context
 }
 
 func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImageManager {
 	initTargetServer(config.IMConfig.TargetRegistryAddr, authPath)
 	hostRootPrefix := strings.TrimSuffix(os.Getenv("HOST_ROOT"), "/")
-	cli, _, _, err := containerctl.NewContainerRuntime(context.Background(), hostRootPrefix)
+	cli, ctx, _, err := containerctl.NewContainerRuntime(context.Background(), hostRootPrefix)
 	if err != nil {
 		glog.Fatalf(err.Error())
 	}
-
 	return &ThirdPkgSyncImageManager{
 		sourceRegistryAddr: config.IMConfig.SourceRegistryAddr,
 		targetRegistryAddr: config.IMConfig.TargetRegistryAddr,
@@ -62,6 +62,7 @@ func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImage
 		pullGoroutineChan:  make(chan struct{}, config.IMConfig.Proc),
 		exitChan:           make(chan struct{}, 1),
 		containerRuntime:   cli,
+		containerCtx:       ctx,
 	}
 }
 
@@ -74,7 +75,6 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 		}
 	} else {
 		imageList, err = s.preHandleDataInDb(config.IMConfig.StartTime, config.IMConfig.EndTime)
-		glog.Infof("imageList:%v", imageList)
 		if err != nil {
 			return imageList, err
 		}
@@ -152,7 +152,7 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) 
 	imageIds = append(imageIds, officialImageIds...)
 	imageIds = removeDuplicateElement(imageIds)
 	var imageList []DataImage
-	err = dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag").Where("libra_status = ?", constant.PavoStatusNormal).In("image_id", imageIds).Find(&imageList)
+	err = dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag,image_size").Where("libra_status = ?", constant.PavoStatusNormal).In("image_id", imageIds).Find(&imageList)
 	if err != nil {
 		return imageList, errors.WithStack(err)
 	}
@@ -160,6 +160,10 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) 
 }
 
 func (s *ThirdPkgSyncImageManager) Sync(needSyncImageMetaList []DataImage) {
+	if needSyncImageMetaList == nil || len(needSyncImageMetaList) == 0 {
+		glog.Info("sync finished")
+		return
+	}
 	go func() {
 		for i := 0; i < s.totalNeedSyncCount; i++ {
 			s.pullGoroutineChan <- struct{}{}
@@ -170,7 +174,6 @@ func (s *ThirdPkgSyncImageManager) Sync(needSyncImageMetaList []DataImage) {
 				case "save":
 					s.save(imageMeta)
 				}
-
 			}(needSyncImageMetaList[i])
 		}
 	}()
@@ -218,20 +221,28 @@ func (s *ThirdPkgSyncImageManager) save(imageMeta DataImage) {
 	defer func() {
 		<-s.pullGoroutineChan
 		s.decrNeedSyncCount()
-		s.containerRuntime.ImageRemove(context.Background(), []string{imageFullName}, true)
+		s.containerRuntime.ImageRemove(s.containerCtx, []string{imageFullName}, true)
 	}()
-	err := s.containerRuntime.ImagePull(context.Background(), imageMeta.Name+":"+imageMeta.Tag, s.sourceRegistryAddr, "system", "lvszkjzqnf3yh")
+	err := s.containerRuntime.ImagePull(s.containerCtx, imageFullName, s.sourceRegistryAddr,
+		config.IMConfig.SystemUsername, config.IMConfig.SystemPassword)
 	if err != nil {
 		glog.Warnw("image pull failed", logError(err), logMeta(imageMeta))
 		imageMeta.Status = SyncFailed
+		s.UpdateImageSyncStatus(imageMeta)
+		return
 	}
-	err = s.containerRuntime.ImageSave(context.Background(), []string{imageFullName}, config.IMConfig.OutputPath)
+	err = s.containerRuntime.ImageSave(s.containerCtx, []string{imageFullName}, genSavePath(imageMeta))
 	if err != nil {
 		glog.Warnw("image save failed", logError(err), logMeta(imageMeta))
 		imageMeta.Status = SyncFailed
+		s.UpdateImageSyncStatus(imageMeta)
+		return
 	}
+	imageSize, _ := strconv.Atoi(imageMeta.Size)
+	SyncSize += int64(imageSize)
 	imageMeta.Status = SyncSucceed
 	s.UpdateImageSyncStatus(imageMeta)
+	return
 }
 
 func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutput string) {
@@ -317,4 +328,13 @@ func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
 		glog.Warnw("write file failed", logError(err), logMeta(imageMeta))
 		return
 	}
+}
+
+func genSavePath(imageMeta DataImage) string {
+	imageMeta.Name = strings.Replace(imageMeta.Name, "/", "-", -1)
+	//_, err := os.Create(path.Join(config.IMConfig.OutputPath, imageMeta.Name+"-"+imageMeta.Tag))
+	//if err != nil {
+	//	glog.Errorf("create file failed:%v", err)
+	//}
+	return path.Join(config.IMConfig.OutputPath, imageMeta.Name+"-"+imageMeta.Tag)
 }
