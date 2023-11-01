@@ -14,9 +14,6 @@ type GlobalConfig struct {
 	EndTime            string
 	DbDsn              string
 	Proc               int
-	SyncMethod         string
-	SystemUsername     string
-	SystemPassword     string
 }
 
 var IMConfig *GlobalConfig
