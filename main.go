@@ -20,7 +20,7 @@ var (
 
 func init() {
 	flag.Parse()
-	config.ParseConfig("image-sync", *configFile)
+	config.ParseConfig("image-migration", *configFile)
 	glog.Infow("parse config succeed", "config", config.IMConfig)
 	if config.IMConfig.DbDsn != "" {
 		dao.InitMySQL(config.IMConfig.DbDsn)
