@@ -276,19 +276,9 @@ func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
 	}
 	defer file.Close()
 	// 写入要追加的内容
-	file.WriteString("\n")
-	_, err = file.Write(data)
+	_, err = file.Write(append(data, []byte("\n")...))
 	if err != nil {
 		glog.Warnw("write file failed", logError(err), logMeta(imageMeta))
 		return
 	}
-}
-
-func genSavePath(imageMeta DataImage) string {
-	imageMeta.Name = strings.Replace(imageMeta.Name, "/", "-", -1)
-	//_, err := os.Create(path.Join(config.IMConfig.OutputPath, imageMeta.Name+"-"+imageMeta.Tag))
-	//if err != nil {
-	//	glog.Errorf("create file failed:%v", err)
-	//}
-	return path.Join(config.IMConfig.OutputPath, imageMeta.Name+"-"+imageMeta.Tag)
 }
