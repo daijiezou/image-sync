@@ -40,6 +40,7 @@ type ThirdPkgSyncImageManager struct {
 	syncerPath           string
 	authPath             string
 	exitChan             chan struct{}
+	syncStartTime        time.Time
 }
 
 func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImageManager {
@@ -79,6 +80,7 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 	}
 	s.totalNeedSyncCount = len(imageList)
 	s.currentNeedSyncCount = len(imageList)
+	s.syncStartTime = time.Now()
 	glog.Infof("start sync image,total image:%d", s.totalNeedSyncCount)
 	return imageList, nil
 }
@@ -215,6 +217,8 @@ func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutp
 			imageMeta.Status = SyncFailed
 		} else {
 			SyncSize += imageSize
+			costTimeSec := time.Now().Sub(s.syncStartTime).Seconds()
+			fmt.Printf("迁移速度:%.2f MB/s\n", float64(SyncSize>>20)/costTimeSec)
 			imageMeta.Size = strconv.FormatInt(imageSize, 10)
 			imageMeta.Status = SyncSucceed
 		}
