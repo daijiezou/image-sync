@@ -48,7 +48,7 @@ func main() {
 		sm.Sync(imageList)
 		endTime := time.Now()
 		fmt.Println("end time:", endTime)
-		fmt.Printf("cost time:%v,sync totalSize:%v MB\n", endTime.Sub(startTime), imagesync.SyncSize>>20)
+		fmt.Printf("cost time:%v,sync totalSize:%v GB\n", endTime.Sub(startTime), imagesync.SyncSize>>30)
 		costTimeSec := endTime.Sub(startTime).Seconds()
 		fmt.Printf("迁移速度:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
 	}

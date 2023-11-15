@@ -1,6 +1,7 @@
 package imagesync
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"image-sync/config"
 	"image-sync/dao"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -41,6 +43,7 @@ type ThirdPkgSyncImageManager struct {
 	authPath             string
 	exitChan             chan struct{}
 	syncStartTime        time.Time
+	syncFailedCount      int
 }
 
 func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImageManager {
@@ -194,24 +197,52 @@ func (s *ThirdPkgSyncImageManager) sync(imageMeta DataImage) {
 	}
 	cmd.Stdin = strings.NewReader("\n" + fmt.Sprintf("%s --images %s --auth %s --retries 3", s.syncerPath,
 		imageYamlPath(imageMeta.Name, imageMeta.Tag, BasePath), s.authPath))
-
-	output, err := cmd.CombinedOutput()
-	syncOutput := string(output)
-	fmt.Println(syncOutput)
+	stdout, _ := cmd.StdoutPipe()
+	cmd.Stderr = cmd.Stdout
+	var syncOutput string
+	if err = cmd.Start(); err != nil {
+		s.checkSyncStatus(imageMeta, syncOutput)
+		return
+	}
+	var imageSyncEOFCount int
+	reader := bufio.NewReader(stdout)
+	for {
+		line, err2 := reader.ReadString('\n')
+		if err2 != nil {
+			if err2 != io.EOF {
+				glog.Errorf("cmd exec failed,err:", err.Error())
+			}
+			break
+		}
+		fmt.Println(line)
+		if strings.Contains(line, "unexpected EOF") {
+			imageSyncEOFCount++
+			if imageSyncEOFCount == 5 {
+				glog.Errorf("sync image failed,err:unexpected EOF,image source data maybe corruption")
+				s.checkSyncStatus(imageMeta, syncOutput)
+				return
+			}
+		}
+		syncOutput += line
+	}
+	if err = cmd.Wait(); err != nil {
+		glog.Errorf("cmd exec failed:%v", err.Error())
+		s.checkSyncStatus(imageMeta, syncOutput)
+		return
+	}
 	s.checkSyncStatus(imageMeta, syncOutput)
 }
 
 func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutput string) {
-	if strings.ContainsAny(syncOutput, SyncSucceedResult) {
+	if strings.Contains(syncOutput, SyncSucceedResult) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 		projectName, repoName := splitImageNameToProjAndRepo(imageMeta.Name)
 		// 查看目标镜像仓库，确定镜像是否迁移成功
 		imageSize, err := targetRegistryServer.GetImageDetail(ctx, projectName, repoName, imageMeta.Tag)
 		if err != nil {
-			glog.Warnf("get image detail failed:%v", err.Error())
+			glog.Warnf("get image detail failed:%v", err.Error(), logMeta(imageMeta))
 			imageMeta.Status = SyncFailed
-
 		}
 		if imageSize <= 0 {
 			imageMeta.Status = SyncFailed
@@ -271,7 +302,9 @@ func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
 			return
 		}
 	} else {
+		s.syncFailedCount++
 		glog.Errorw("image sync failed", logMeta(imageMeta))
+		glog.Infof("image sync failed count:%v", s.syncFailedCount)
 		file, err = os.OpenFile(path.Join(config.IMConfig.OutputPath, "sync-failed"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			glog.Warnw("open file failed", logError(err), logMeta(imageMeta))
