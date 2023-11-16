@@ -24,7 +24,7 @@ import (
 
 const (
 	BasePath          = "./"
-	SyncSucceedResult = "Finished, 0 tasks failed"
+	SyncSucceedResult = "inished, 0 tasks failed"
 
 	OfficialRepo = 1
 	Published    = 1

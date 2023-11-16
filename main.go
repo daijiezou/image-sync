@@ -29,10 +29,10 @@ func init() {
 		os.Create(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
 
 	}
-	if !isExist(path.Join(config.IMConfig.OutputPath, "sync-failed")) {
-		os.Create(path.Join(config.IMConfig.OutputPath, "sync-failed"))
-
+	if isExist(path.Join(config.IMConfig.OutputPath, "sync-failed")) {
+		os.Remove(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 	}
+	os.Create(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 }
 
 func main() {
