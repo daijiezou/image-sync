@@ -249,7 +249,9 @@ func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutp
 		} else {
 			SyncSize += imageSize
 			costTimeSec := time.Now().Sub(s.syncStartTime).Seconds()
-			fmt.Printf("迁移速度:%.2f MB/s\n", float64(SyncSize>>20)/costTimeSec)
+			fmt.Printf("已同步镜像大小:%v GB,已同步时间:%v,迁移速度:%.2f MB/s\n", SyncSize>>30,
+				formatDuration(time.Since(s.syncStartTime)),
+				float64(SyncSize>>20)/costTimeSec)
 			imageMeta.Size = strconv.FormatInt(imageSize, 10)
 			imageMeta.Status = SyncSucceed
 		}
@@ -258,6 +260,14 @@ func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutp
 	}
 	s.UpdateImageSyncStatus(imageMeta)
 	return
+}
+
+func formatDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
 func (s *ThirdPkgSyncImageManager) decrNeedSyncCount() {
