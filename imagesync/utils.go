@@ -70,6 +70,25 @@ func GetSyncSucceedImageList(outputPath string) []DataImage {
 	return imageList
 }
 
+func GetSyncSucceedImageMap(outputPath string) map[string]struct{} {
+	result := make(map[string]struct{})
+	file, err := os.Open(outputPath)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var image DataImage
+		err := json.Unmarshal(scanner.Bytes(), &image)
+		if err != nil {
+			continue
+		}
+		result[image.ID] = struct{}{}
+	}
+	return result
+}
+
 func splitImageNameToProjAndRepo(name string) (projectName string, repoName string) {
 	// projectName/repositoryName
 	projectName = strings.Split(name, "/")[0]

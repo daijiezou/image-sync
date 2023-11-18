@@ -72,20 +72,18 @@ func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMeta
 		}
 	}
 	//过滤已经同步成功的镜像
-	syncSucceedImageList := GetSyncSucceedImageList(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
-	for _, image := range syncSucceedImageList {
-		for i := 0; i < len(imageList); i++ {
-			if image.Name == imageList[i].Name && image.Tag == imageList[i].Tag {
-				imageList = append(imageList[:i], imageList[i+1:]...)
-				break
-			}
+	syncSucceedImageMap := GetSyncSucceedImageMap(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
+	var unSyncImageList []DataImage
+	for i := 0; i < len(imageList); i++ {
+		if _, ok := syncSucceedImageMap[imageList[i].ID]; !ok {
+			unSyncImageList = append(unSyncImageList, imageList[i])
 		}
 	}
-	s.totalNeedSyncCount = len(imageList)
-	s.currentNeedSyncCount = len(imageList)
+	s.totalNeedSyncCount = len(unSyncImageList)
+	s.currentNeedSyncCount = len(unSyncImageList)
 	s.syncStartTime = time.Now()
 	glog.Infof("start sync image,total image:%d", s.totalNeedSyncCount)
-	return imageList, nil
+	return unSyncImageList, nil
 }
 
 func (s *ThirdPkgSyncImageManager) preHandleData(imageListPath string) (needSyncImageMetaList []DataImage, err error) {
