@@ -179,8 +179,12 @@ func (s *ThirdPkgSyncImageManager) sync(imageMeta DataImage) {
 		<-s.pullGoroutineChan
 		removeImageYaml(imageMeta.Name, imageMeta.Tag, BasePath)
 		s.decrNeedSyncCount()
+		glog.Infof("current need to sync image count:%d,total image count:%d", s.currentNeedSyncCount, s.totalNeedSyncCount)
+		costTimeSec := time.Now().Sub(s.syncStartTime).Seconds()
+		glog.Infof("synced image size:%v GB,synced time:%v,sync speed:%.2f MB/s\n", SyncSize>>30,
+			formatDuration(time.Since(s.syncStartTime)),
+			float64(SyncSize>>20)/costTimeSec)
 	}()
-
 	// 生成镜像同步规则文件
 	// 参考:https://github.com/AliyunContainerService/image-syncer/blob/master/examples/images.yaml
 	err := s.genImageYaml(imageMeta.Name, imageMeta.Tag, BasePath)
@@ -245,18 +249,16 @@ func (s *ThirdPkgSyncImageManager) checkSyncStatus(imageMeta DataImage, syncOutp
 		if imageSize <= 0 {
 			imageMeta.Status = SyncFailed
 		} else {
+			s.lock.Lock()
 			SyncSize += imageSize
-			costTimeSec := time.Now().Sub(s.syncStartTime).Seconds()
-			fmt.Printf("已同步镜像大小:%v GB,已同步时间:%v,迁移速度:%.2f MB/s\n", SyncSize>>30,
-				formatDuration(time.Since(s.syncStartTime)),
-				float64(SyncSize>>20)/costTimeSec)
+			s.lock.Unlock()
 			imageMeta.Size = strconv.FormatInt(imageSize, 10)
 			imageMeta.Status = SyncSucceed
 		}
 	} else {
 		imageMeta.Status = SyncFailed
 	}
-	s.UpdateImageSyncStatus(imageMeta)
+	s.RecordImageSyncStatus(imageMeta)
 	return
 }
 
@@ -271,7 +273,6 @@ func formatDuration(d time.Duration) string {
 func (s *ThirdPkgSyncImageManager) decrNeedSyncCount() {
 	s.lock.Lock()
 	s.currentNeedSyncCount--
-	glog.Infof("current need to sync image count:%d,total image count:%d", s.currentNeedSyncCount, s.totalNeedSyncCount)
 	s.lock.Unlock()
 	if s.currentNeedSyncCount == 0 {
 		s.exitChan <- struct{}{}
@@ -292,7 +293,7 @@ func (s *ThirdPkgSyncImageManager) genImageYaml(imageName, imageTag, bathPath st
 	return nil
 }
 
-func (s *ThirdPkgSyncImageManager) UpdateImageSyncStatus(imageMeta DataImage) {
+func (s *ThirdPkgSyncImageManager) RecordImageSyncStatus(imageMeta DataImage) {
 	imageMeta.CreateTime = time.Now()
 	s.lock.Lock()
 	defer s.lock.Unlock()

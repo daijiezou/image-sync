@@ -50,7 +50,7 @@ func main() {
 		fmt.Println("end time:", endTime)
 		fmt.Printf("cost time:%v,sync totalSize:%v GB\n", endTime.Sub(startTime), imagesync.SyncSize>>30)
 		costTimeSec := endTime.Sub(startTime).Seconds()
-		fmt.Printf("迁移速度:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
+		fmt.Printf("sync speed:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
 	}
 	if config.IMConfig.Mode == "update" {
 		UpdateImageMeta()
