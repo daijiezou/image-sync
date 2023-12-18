@@ -23,8 +23,8 @@ func UpdateImageMeta() {
 			Tag:        image.Tag,
 			Size:       int64(size),
 			AzId:       config.IMConfig.TargetAzId,
-			Status:     1,
-			SyncStatus: 3,
+			Status:     2, // 2:offline
+			SyncStatus: 3, // 3:已同步回中控
 		}
 		_, err := dao.MySQL().Insert(&imageMeta)
 		if err != nil {
