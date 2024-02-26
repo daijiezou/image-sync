@@ -9,6 +9,7 @@ import (
 	"github.com/tealeg/xlsx"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/constant"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
+	"gitlab.yellow.virtaitech.com/gemini-platform/public-geminidb/model"
 	"gopkg.in/yaml.v3"
 	"image-sync/config"
 	"image-sync/dao"
@@ -60,16 +61,10 @@ func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImage
 
 func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []DataImage, err error) {
 	var imageList []DataImage
-	if config.IMConfig.ImageListPath != "" {
-		imageList, err = s.preHandleData(config.IMConfig.ImageListPath)
-		if err != nil {
-			return imageList, err
-		}
-	} else {
-		imageList, err = s.preHandleDataInDb(config.IMConfig.StartTime, config.IMConfig.EndTime)
-		if err != nil {
-			return imageList, err
-		}
+	cm := config.IMConfig
+	imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.SourceAzId, cm.TargetAzId)
+	if err != nil {
+		return imageList, err
 	}
 	//过滤已经同步成功的镜像
 	syncSucceedImageMap := GetSyncSucceedImageMap(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
@@ -121,7 +116,7 @@ func (s *ThirdPkgSyncImageManager) preHandleData(imageListPath string) (needSync
 	return imageList, nil
 }
 
-func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) (needSyncImageMetaList []DataImage, err error) {
+func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string, sourceAzId, targetAzId string) (needSyncImageMetaList []DataImage, err error) {
 	var imageIds []int64
 	err = dao.MySQL().Table("pro_job").Distinct("image_id").Select("image_id").
 		Where("create_time > ?", startTime).
@@ -146,6 +141,20 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string) 
 	err = dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag,image_size").Where("libra_status = ?", constant.PavoStatusNormal).In("image_id", imageIds).Find(&imageList)
 	if err != nil {
 		return imageList, errors.WithStack(err)
+	}
+	var result []DataImage
+	// 选择目标集群没有的那些镜像
+	for _, image := range imageList {
+		has, err := dao.MySQL().Table("image_metadata").
+			Where("name = ?", image.Name).
+			And("tag = ?", image.Tag).
+			And("az_id = ?", targetAzId).Get(new(model.ImageMetadata))
+		if err != nil {
+			continue
+		}
+		if !has {
+			result = append(result, image)
+		}
 	}
 	return imageList, nil
 }

@@ -10,10 +10,16 @@ import (
 	"strconv"
 )
 
+const centralAz = "az1"
+
 func UpdateImageMeta() {
 	imageList := imagesync.GetSyncSucceedImageList(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
 	if config.IMConfig.TargetAzId == "" {
 		glog.Error("target az id is empty")
+		return
+	}
+	if config.IMConfig.SourceAzId == "" {
+		glog.Error("source az id is empty")
 		return
 	}
 	for _, image := range imageList {
@@ -30,5 +36,22 @@ func UpdateImageMeta() {
 		if err != nil {
 			glog.Error("insert image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 		}
+	}
+	if config.IMConfig.TargetAzId == centralAz {
+		for _, image := range imageList {
+			imageMeta := model.ImageMetadata{
+				Name:       image.Name,
+				Tag:        image.Tag,
+				SyncStatus: 3, // 3:已同步回中控
+			}
+			_, err := dao.MySQL().Cols("sync_status").
+				Where("name = ?", imageMeta.Name).
+				And("tag = ?", imageMeta.Tag).
+				And("az_id = ?", config.IMConfig.SourceAzId).Update(imageMeta)
+			if err != nil {
+				glog.Error("update image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
+			}
+		}
+
 	}
 }

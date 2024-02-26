@@ -8,14 +8,14 @@ import (
 type GlobalConfig struct {
 	SourceRegistryAddr string
 	TargetRegistryAddr string
+	SourceAzId         string
 	TargetAzId         string
 	OutputPath         string
-	ImageListPath      string
 	StartTime          string
 	EndTime            string
 	DbDsn              string
 	Proc               int
-	Mode               string
+	Mode               string //sync、update、dryRun
 }
 
 var IMConfig *GlobalConfig

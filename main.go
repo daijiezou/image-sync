@@ -36,6 +36,19 @@ func init() {
 }
 
 func main() {
+	fmt.Printf("sourceAzId:%s,targetAzId:%s", config.IMConfig.SourceAzId, config.IMConfig.TargetAzId)
+	if config.IMConfig.Mode == "dryRun" {
+		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
+		imageList, err := sm.GetNeedSyncImageMetaList()
+		if err != nil {
+			glog.Errorf("pre sync failed,err:%+v", err)
+			return
+		}
+		fmt.Printf("need sync image count: %d\n", len(imageList))
+		for _, image := range imageList {
+			fmt.Println(image)
+		}
+	}
 	if config.IMConfig.Mode == "sync" {
 		startTime := time.Now()
 		fmt.Println("start time:", startTime)
