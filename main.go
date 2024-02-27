@@ -22,9 +22,9 @@ func init() {
 	flag.Parse()
 	config.ParseConfig("image-migration", *configFile)
 	glog.Infow("parse config succeed", "config", config.IMConfig)
-	if config.IMConfig.DbDsn != "" {
-		dao.InitMySQL(config.IMConfig.DbDsn)
-	}
+	err := dao.InitMySQL(config.IMConfig.DbDsn)
+	glog.InfoFatalw(err, "init MySQL")
+
 	if !isExist(path.Join(config.IMConfig.OutputPath, "sync-succeed")) {
 		os.Create(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
 
@@ -32,12 +32,14 @@ func init() {
 	if isExist(path.Join(config.IMConfig.OutputPath, "sync-failed")) {
 		os.Remove(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 	}
+
 	os.Create(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 }
 
 func main() {
 	fmt.Printf("sourceAzId:%s,targetAzId:%s", config.IMConfig.SourceAzId, config.IMConfig.TargetAzId)
-	if config.IMConfig.Mode == "dryRun" {
+	switch config.IMConfig.Mode {
+	case "dryRun":
 		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
 		imageList, err := sm.GetNeedSyncImageMetaList()
 		if err != nil {
@@ -48,8 +50,7 @@ func main() {
 		for _, image := range imageList {
 			fmt.Println(image)
 		}
-	}
-	if config.IMConfig.Mode == "sync" {
+	case "sync":
 		startTime := time.Now()
 		fmt.Println("start time:", startTime)
 		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
@@ -64,11 +65,11 @@ func main() {
 		fmt.Printf("cost time:%v,sync totalSize:%v GB\n", endTime.Sub(startTime), imagesync.SyncSize>>30)
 		costTimeSec := endTime.Sub(startTime).Seconds()
 		fmt.Printf("sync speed:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
-	}
-	if config.IMConfig.Mode == "update" {
+	case "update":
 		UpdateImageMeta()
+	default:
+		glog.Errorf("unsupported mode,:%s", config.IMConfig.Mode)
 	}
-
 }
 
 // 判断文件或文件夹是否存在

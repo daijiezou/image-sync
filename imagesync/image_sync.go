@@ -62,7 +62,7 @@ func NewThirdPkgSyncImageManager(syncerPath, authPath string) *ThirdPkgSyncImage
 func (s *ThirdPkgSyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []DataImage, err error) {
 	var imageList []DataImage
 	cm := config.IMConfig
-	imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.SourceAzId, cm.TargetAzId)
+	imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.TargetAzId)
 	if err != nil {
 		return imageList, err
 	}
@@ -116,7 +116,7 @@ func (s *ThirdPkgSyncImageManager) preHandleData(imageListPath string) (needSync
 	return imageList, nil
 }
 
-func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string, sourceAzId, targetAzId string) (needSyncImageMetaList []DataImage, err error) {
+func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string, targetAzId string) (needSyncImageMetaList []DataImage, err error) {
 	var imageIds []int64
 	err = dao.MySQL().Table("pro_job").Distinct("image_id").Select("image_id").
 		Where("create_time > ?", startTime).
@@ -150,13 +150,14 @@ func (s *ThirdPkgSyncImageManager) preHandleDataInDb(startTime, endTime string, 
 			And("tag = ?", image.Tag).
 			And("az_id = ?", targetAzId).Get(new(model.ImageMetadata))
 		if err != nil {
+			glog.Errorf("get image metadata failed,err:%v", err)
 			continue
 		}
 		if !has {
 			result = append(result, image)
 		}
 	}
-	return imageList, nil
+	return result, nil
 }
 
 func (s *ThirdPkgSyncImageManager) Sync(needSyncImageMetaList []DataImage) {

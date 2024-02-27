@@ -14,14 +14,7 @@ const centralAz = "az1"
 
 func UpdateImageMeta() {
 	imageList := imagesync.GetSyncSucceedImageList(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
-	if config.IMConfig.TargetAzId == "" {
-		glog.Error("target az id is empty")
-		return
-	}
-	if config.IMConfig.SourceAzId == "" {
-		glog.Error("source az id is empty")
-		return
-	}
+
 	for _, image := range imageList {
 		size, _ := strconv.Atoi(image.Size)
 		imageMeta := model.ImageMetadata{
@@ -37,6 +30,7 @@ func UpdateImageMeta() {
 			glog.Error("insert image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 		}
 	}
+
 	if config.IMConfig.TargetAzId == centralAz {
 		for _, image := range imageList {
 			imageMeta := model.ImageMetadata{
@@ -52,6 +46,5 @@ func UpdateImageMeta() {
 				glog.Error("update image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 			}
 		}
-
 	}
 }
