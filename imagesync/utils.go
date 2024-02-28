@@ -2,33 +2,14 @@ package imagesync
 
 import (
 	"bufio"
-	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
-	"net/http"
 	"os"
 	"path"
 	"strings"
+	"time"
 )
-
-var HttpClient *http.Client
-
-func init() {
-	HttpClient = createHttpClient()
-}
-
-func createHttpClient() *http.Client {
-	client := &http.Client{
-		Timeout: Timeout,
-		Transport: func() *http.Transport {
-			return &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				MaxIdleConns:    MaxIdleConns,
-			}
-		}(),
-	}
-	return client
-}
 
 func logMeta(meta DataImage) glog.Field {
 	return glog.String("imageName", meta.Name+":"+meta.Tag)
@@ -106,4 +87,12 @@ func removeDuplicateElement(originList []int64) []int64 {
 		}
 	}
 	return result
+}
+
+func formatDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }

@@ -22,44 +22,47 @@ func init() {
 	flag.Parse()
 	config.ParseConfig("image-migration", *configFile)
 	glog.Infow("parse config succeed", "config", config.IMConfig)
+
 	err := dao.InitMySQL(config.IMConfig.DbDsn)
 	glog.InfoFatalw(err, "init MySQL")
 
 	if !isExist(path.Join(config.IMConfig.OutputPath, "sync-succeed")) {
 		os.Create(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
-
 	}
+
 	if isExist(path.Join(config.IMConfig.OutputPath, "sync-failed")) {
 		os.Remove(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 	}
-
 	os.Create(path.Join(config.IMConfig.OutputPath, "sync-failed"))
 }
 
 func main() {
-	fmt.Printf("sourceAzId:%s,targetAzId:%s", config.IMConfig.SourceAzId, config.IMConfig.TargetAzId)
 	switch config.IMConfig.Mode {
 	case "dryRun":
-		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
+		sm := imagesync.NewSyncImageManager(*syncerPath, *auth)
+
 		imageList, err := sm.GetNeedSyncImageMetaList()
 		if err != nil {
 			glog.Errorf("pre sync failed,err:%+v", err)
 			return
 		}
-		fmt.Printf("need sync image count: %d\n", len(imageList))
+
 		for _, image := range imageList {
 			fmt.Println(image)
 		}
 	case "sync":
 		startTime := time.Now()
 		fmt.Println("start time:", startTime)
-		sm := imagesync.NewThirdPkgSyncImageManager(*syncerPath, *auth)
+
+		sm := imagesync.NewSyncImageManager(*syncerPath, *auth)
 		imageList, err := sm.GetNeedSyncImageMetaList()
 		if err != nil {
 			glog.Errorf("pre sync failed,err:%+v", err)
 			return
 		}
+
 		sm.Sync(imageList)
+
 		endTime := time.Now()
 		fmt.Println("end time:", endTime)
 		fmt.Printf("cost time:%v,sync totalSize:%v GB\n", endTime.Sub(startTime), imagesync.SyncSize>>30)
