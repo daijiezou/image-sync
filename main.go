@@ -38,19 +38,7 @@ func init() {
 
 func main() {
 	switch config.IMConfig.Mode {
-	case "dryRun":
-		sm := imagesync.NewSyncImageManager(*syncerPath, *auth)
-
-		imageList, err := sm.GetNeedSyncImageMetaList()
-		if err != nil {
-			glog.Errorf("pre sync failed,err:%+v", err)
-			return
-		}
-
-		for _, image := range imageList {
-			fmt.Println(image)
-		}
-	case "sync":
+	case "sync", "migration":
 		startTime := time.Now()
 		fmt.Println("start time:", startTime)
 
@@ -60,9 +48,7 @@ func main() {
 			glog.Errorf("pre sync failed,err:%+v", err)
 			return
 		}
-
 		sm.Sync(imageList)
-
 		endTime := time.Now()
 		fmt.Println("end time:", endTime)
 		fmt.Printf("cost time:%v,sync totalSize:%v GB\n", endTime.Sub(startTime), imagesync.SyncSize>>30)

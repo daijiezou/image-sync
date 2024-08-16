@@ -70,7 +70,7 @@ func (s *SyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []D
 	cm := config.IMConfig
 	switch cm.Mode {
 	case "sync":
-		imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.TargetAzId)
+		imageList, err = s.getNeedSyncImage(cm.StartTime, cm.EndTime, cm.TargetAzId)
 		if err != nil {
 			return imageList, err
 		}
@@ -184,11 +184,12 @@ func (s *SyncImageManager) sync(imageMeta DataImage) {
 }
 
 // get images used between startTime and endTime and official image,and targetAz registry don't have this image
-func (s *SyncImageManager) preHandleDataInDb(
+func (s *SyncImageManager) getNeedSyncImage(
 	startTime string,
 	endTime string,
 	targetAzId string) (needSyncImageMetaList []DataImage, err error) {
 
+	// 按照起始、结束时间过滤任务使用过的镜像
 	var imageIds []int64
 	err = dao.MySQL().Table("pro_job").Distinct("image_id").Select("image_id").
 		Where("create_time > ?", startTime).
@@ -198,6 +199,7 @@ func (s *SyncImageManager) preHandleDataInDb(
 		return nil, errors.WithStack(err)
 	}
 
+	// 查询所有官方镜像
 	var officialImageIds []int64
 	err = dao.MySQL().Table("data_image").
 		Select("data_image.image_id").
@@ -210,6 +212,7 @@ func (s *SyncImageManager) preHandleDataInDb(
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
+	// 按照ID镜像去重
 	imageIds = append(imageIds, officialImageIds...)
 	imageIds = removeDuplicateElement(imageIds)
 

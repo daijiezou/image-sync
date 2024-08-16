@@ -14,7 +14,7 @@ image-migration:
    targetAzId: "az2"
    outputPath: /data/output
    proc: 3
-   mode: sync #sync:同步镜像 update:更改镜像元数据 dryRun:输出此次会同步的镜像
+   mode: sync #sync:同步镜像 update:更改镜像元数据 migration:迁移镜像
 ```
 
 **auth.yaml**
