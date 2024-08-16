@@ -11,6 +11,11 @@ type DataImage struct {
 	CreateTime time.Time
 }
 
+type ImageMetadata struct {
+	Name string `json:"image_name"  xorm:"'image_name'"`
+	Tag  string `json:"image_tag"  xorm:"'image_tag'"`
+}
+
 const (
 	SyncSucceed = 1
 	SyncFailed  = 2

@@ -68,9 +68,17 @@ func NewSyncImageManager(
 func (s *SyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []DataImage, err error) {
 	var imageList []DataImage
 	cm := config.IMConfig
-	imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.TargetAzId)
-	if err != nil {
-		return imageList, err
+	switch cm.Mode {
+	case "sync":
+		imageList, err = s.preHandleDataInDb(cm.StartTime, cm.EndTime, cm.TargetAzId)
+		if err != nil {
+			return imageList, err
+		}
+	case "migration":
+		imageList, err = s.getNeedMigrationImage(cm.SourceAzId)
+		if err != nil {
+			return imageList, err
+		}
 	}
 
 	//过滤已经同步成功的镜像
@@ -233,6 +241,34 @@ func (s *SyncImageManager) preHandleDataInDb(
 	return result, nil
 }
 
+func (s *SyncImageManager) getNeedMigrationImage(offlineAzId string) (needSyncImageMetaList []DataImage, err error) {
+	if offlineAzId == "" {
+		return needSyncImageMetaList, errors.New("offline az id can not be empty")
+	}
+	var imageMetas []ImageMetadata
+	err = dao.MySQL().Table("image_metadata").
+		Where("az_id = ?", offlineAzId).
+		And("sync_status = 1"). // 1:未同步回中控
+		Find(&imageMetas)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	imageList := make([]DataImage, 0, len(imageMetas))
+	for _, imageMeta := range imageMetas {
+		dataImage := new(DataImage)
+		has, err := dao.MySQL().Table("data_image").Select("image_id,image_name,image_tag,image_size").
+			Where("image_name = ?", imageMeta.Name).And("image_tag = ?", imageMeta.Tag).Get(dataImage)
+		if !has {
+			glog.Warnf("image %s:%s not exist", imageMeta.Name, imageMeta.Tag)
+			continue
+		}
+		if err != nil {
+			return imageList, errors.WithStack(err)
+		}
+		imageList = append(imageList)
+	}
+	return imageList, nil
+}
 func (s *SyncImageManager) checkSyncResult(imageMeta DataImage, syncOutput string) {
 	if strings.Contains(syncOutput, SyncSucceedResult) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)

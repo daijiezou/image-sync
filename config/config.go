@@ -15,7 +15,7 @@ type GlobalConfig struct {
 	EndTime            string
 	DbDsn              string
 	Proc               int
-	Mode               string //sync、update、dryRun
+	Mode               string //sync、migration、update、、dryRun
 }
 
 var IMConfig *GlobalConfig
