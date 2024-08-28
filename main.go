@@ -16,6 +16,7 @@ var (
 	syncerPath = flag.String("syncerPath", "./image-syncer", "The path of the image-syncer")
 	auth       = flag.String("auth", "./auth.yaml", "The path of the auth configFile")
 	configFile = flag.String("config", "./config.yaml", "The path of the auth configFile")
+	dryRun     = flag.Bool("dryRun", true, "")
 )
 
 func init() {
@@ -46,6 +47,12 @@ func main() {
 		imageList, err := sm.GetNeedSyncImageMetaList()
 		if err != nil {
 			glog.Errorf("pre sync failed,err:%+v", err)
+			return
+		}
+		if *dryRun {
+			for i := 0; i < len(imageList); i++ {
+				fmt.Printf("%+v\n", imageList[i])
+			}
 			return
 		}
 		sm.Sync(imageList)
