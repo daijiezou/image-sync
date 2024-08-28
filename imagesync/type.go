@@ -12,8 +12,8 @@ type DataImage struct {
 }
 
 type ImageMetadata struct {
-	Name string `json:"image_name"  xorm:"'image_name'"`
-	Tag  string `json:"image_tag"  xorm:"'image_tag'"`
+	Name string `json:"name"  xorm:"'name'"`
+	Tag  string `json:"tag"  xorm:"'tag'"`
 }
 
 const (
