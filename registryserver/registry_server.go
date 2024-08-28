@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
+	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"
 	"io"
 	"net/http"
 )
@@ -50,13 +51,18 @@ func (r *Server) GetImageDetail(
 
 	imageName := projectName + "/" + repoName
 	url := r.addr + "/v2" + fmt.Sprintf("/%s/manifests/%s", imageName, tag)
-
-	token, err := r.getToken(getScope(imageName))
-	if err != nil {
-		return 0, err
+	var token string
+	if r.authServer != "" {
+		token, err = r.getToken(getScope(imageName))
+		if err != nil {
+			glog.Errorf("get token error, err:%s", err.Error())
+			return 0, errors.WithStack(err)
+		}
 	}
+
 	resp, err := registryHttpRequest(url, http.MethodGet, token, ctx)
 	if err != nil {
+		glog.Errorf("url:%s, err:%s", url)
 		return 0, errors.WithStack(err)
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -64,8 +70,8 @@ func (r *Server) GetImageDetail(
 	}
 	body, _ := io.ReadAll(resp.Body)
 	var manifestsResponse ManifestsResponse
-	if err := json.Unmarshal(body, &manifestsResponse); err != nil {
-		return 0, err
+	if err = json.Unmarshal(body, &manifestsResponse); err != nil {
+		return 0, errors.WithStack(err)
 	}
 	totalSize := int64(0)
 	for _, layer := range manifestsResponse.Layers {

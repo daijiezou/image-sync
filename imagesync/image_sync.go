@@ -87,10 +87,14 @@ func (s *SyncImageManager) GetNeedSyncImageMetaList() (needSyncImageMetaList []D
 	for i := 0; i < len(imageList); i++ {
 		if _, ok := syncSucceedImageMap[imageList[i].ID]; !ok {
 			unSyncImageList = append(unSyncImageList, imageList[i])
+		} else {
+			glog.Infof("image %s already sync succeed", imageList[i].ID)
 		}
 	}
 	s.syncStartTime = time.Now()
-	glog.Infof("start sync image,total image:%d", totalNeedSyncCount)
+	glog.Infof("start sync image,total image:%d", len(unSyncImageList))
+	totalNeedSyncCount = len(unSyncImageList)
+	s.currentNeedSyncCount = len(unSyncImageList)
 	return unSyncImageList, nil
 }
 
@@ -99,7 +103,6 @@ func (s *SyncImageManager) Sync(needSyncImageMetaList []DataImage) {
 		glog.Info("sync finished")
 		return
 	}
-
 	go func() {
 		for i := 0; i < totalNeedSyncCount; i++ {
 			s.pullGoroutineChan <- struct{}{}
@@ -132,6 +135,7 @@ func (s *SyncImageManager) sync(imageMeta DataImage) {
 			float64(SyncSize>>20)/costTimeSec)
 	}()
 
+	glog.Info("start sync image", logMeta(imageMeta))
 	// 生成镜像同步规则文件
 	// 参考:https://github.com/AliyunContainerService/image-syncer/blob/master/examples/images.yaml
 	err := s.genImageYaml(imageMeta.Name, imageMeta.Tag, BasePath)
@@ -266,9 +270,10 @@ func (s *SyncImageManager) getNeedMigrationImage(offlineAzId string) (needSyncIm
 			continue
 		}
 		if err != nil {
+			glog.Errorf("get image  %s:%s error:%s", imageMeta.Name, imageMeta.Tag, err.Error())
 			return imageList, errors.WithStack(err)
 		}
-		imageList = append(imageList)
+		imageList = append(imageList, *dataImage)
 	}
 	return imageList, nil
 }
@@ -280,7 +285,7 @@ func (s *SyncImageManager) checkSyncResult(imageMeta DataImage, syncOutput strin
 		// 查看目标镜像仓库，确定镜像是否迁移成功
 		imageSize, err := s.targetRegistryServer.GetImageDetail(ctx, projectName, repoName, imageMeta.Tag)
 		if err != nil {
-			glog.Warnf("get image detail failed:%v", err.Error(), logMeta(imageMeta))
+			glog.Warnf("get image detail failed:%+v", err, logMeta(imageMeta))
 			imageMeta.Status = SyncFailed
 		}
 		if imageSize <= 0 {

@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"gitlab.yellow.virtaitech.com/gemini-platform/public-gemini/glog"

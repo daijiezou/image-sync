@@ -7,6 +7,7 @@ import (
 	"image-sync/config"
 	"image-sync/dao"
 	"image-sync/imagesync"
+	"image-sync/update"
 	"os"
 	"path"
 	"time"
@@ -16,7 +17,7 @@ var (
 	syncerPath = flag.String("syncerPath", "./image-syncer", "The path of the image-syncer")
 	auth       = flag.String("auth", "./auth.yaml", "The path of the auth configFile")
 	configFile = flag.String("config", "./config.yaml", "The path of the auth configFile")
-	dryRun     = flag.Bool("dryRun", true, "")
+	dryRun     = flag.String("dryRun", "1", "1=dryRun 2=sync")
 )
 
 func init() {
@@ -49,7 +50,7 @@ func main() {
 			glog.Errorf("pre sync failed,err:%+v", err)
 			return
 		}
-		if *dryRun {
+		if *dryRun == "1" {
 			for i := 0; i < len(imageList); i++ {
 				fmt.Printf("%+v\n", imageList[i])
 			}
@@ -62,7 +63,7 @@ func main() {
 		costTimeSec := endTime.Sub(startTime).Seconds()
 		fmt.Printf("sync speed:%.2f MB/s\n", float64(imagesync.SyncSize>>20)/costTimeSec)
 	case "update":
-		UpdateImageMeta()
+		update.UpdateImageMeta()
 	default:
 		glog.Errorf("unsupported mode,:%s", config.IMConfig.Mode)
 	}
