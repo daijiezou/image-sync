@@ -30,21 +30,4 @@ func UpdateImageMeta() {
 			glog.Error("insert image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 		}
 	}
-
-	if config.IMConfig.TargetAzId == centralAz {
-		for _, image := range imageList {
-			imageMeta := model.ImageMetadata{
-				Name:       image.Name,
-				Tag:        image.Tag,
-				SyncStatus: 3, // 3:已同步回中控
-			}
-			_, err := dao.MySQL().Cols("sync_status").
-				Where("name = ?", imageMeta.Name).
-				And("tag = ?", imageMeta.Tag).
-				And("az_id = ?", config.IMConfig.SourceAzId).Update(imageMeta)
-			if err != nil {
-				glog.Error("update image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
-			}
-		}
-	}
 }
