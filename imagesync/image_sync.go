@@ -255,6 +255,7 @@ func (s *SyncImageManager) getNeedMigrationImage(offlineAzId string) (needSyncIm
 	var imageMetas []ImageMetadata
 	err = dao.MySQL().Table("image_metadata").
 		Where("az_id = ?", offlineAzId).
+		And("sync_status = 1"). // 1:未同步回中控
 		Find(&imageMetas)
 	if err != nil {
 		return nil, errors.WithStack(err)
