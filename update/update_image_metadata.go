@@ -15,7 +15,7 @@ const centralAz = "az1"
 func UpdateImageMeta() {
 	imageList := imagesync.GetSyncSucceedImageList(path.Join(config.IMConfig.OutputPath, "sync-succeed"))
 
-	for _, image := range imageList {
+	for index, image := range imageList {
 		size, _ := strconv.Atoi(image.Size)
 		imageMeta := model.ImageMetadata{
 			Name:       image.Name,
@@ -28,18 +28,21 @@ func UpdateImageMeta() {
 		if config.IMConfig.TargetAzId == centralAz {
 			imageMeta.Status = 1 // 1:online
 		}
-		has, err := dao.MySQL().Where("name = ?", imageMeta.Name).And("tag = ?", imageMeta.Tag).Get(new(model.ImageMetadata))
+		has, err := dao.MySQL().Where("name = ?", imageMeta.Name).And("tag = ?", imageMeta.Tag).
+			And("az_id = ?", config.IMConfig.TargetAzId).
+			Get(new(model.ImageMetadata))
 		if err != nil {
 			glog.Error("get image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 		}
 		if has {
-			glog.Infof("image meta already exists", glog.String("image", image.Name+":"+image.Tag))
+			glog.Warnf("image meta already exists", glog.String("image", image.Name+":"+image.Tag))
 			continue
 		}
 		_, err = dao.MySQL().Insert(&imageMeta)
 		if err != nil {
 			glog.Error("insert image meta failed", glog.String("error", err.Error()), glog.String("image", image.Name+":"+image.Tag))
 		}
+		glog.Infof("insert image meta success", glog.String("image", image.Name+":"+image.Tag), glog.Int("index", index))
 	}
 
 	if config.IMConfig.TargetAzId == centralAz {
@@ -58,5 +61,4 @@ func UpdateImageMeta() {
 			}
 		}
 	}
-
 }
